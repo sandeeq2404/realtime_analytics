@@ -1,0 +1,36 @@
+{
+  "schemaName": "food_orders",
+  "dimensionFieldSpecs": [
+    { "name": "order_id",           "dataType": "STRING" },
+    { "name": "customer_name",      "dataType": "STRING" },
+    { "name": "customer_phone",     "dataType": "STRING" },
+    { "name": "city",               "dataType": "STRING" },
+    { "name": "area",               "dataType": "STRING" },
+    { "name": "restaurant_name",    "dataType": "STRING" },
+    { "name": "cuisine",            "dataType": "STRING" },
+    { "name": "items",              "dataType": "STRING" },
+    { "name": "status",             "dataType": "STRING" },
+    { "name": "payment_method",     "dataType": "STRING" },
+    { "name": "order_value_category", "dataType": "STRING" }
+  ],
+  "metricFieldSpecs": [
+    { "name": "quantity",           "dataType": "INT",   "defaultNullValue": 0 },
+    { "name": "price",              "dataType": "FLOAT", "defaultNullValue": 0.0 },
+    { "name": "delivery_time_mins", "dataType": "INT",   "defaultNullValue": 0 },
+    { "name": "rating",             "dataType": "FLOAT", "defaultNullValue": -1.0 },
+    { "name": "hour_of_day",        "dataType": "INT",   "defaultNullValue": 0 },
+    { "name": "is_peak_hour",       "dataType": "INT",   "defaultNullValue": 0 },
+    { "name": "price_per_item",     "dataType": "FLOAT", "defaultNullValue": 0.0 },
+    { "name": "is_high_value",      "dataType": "INT",   "defaultNullValue": 0 },
+    { "name": "discount_applied",   "dataType": "INT",   "defaultNullValue": 0 },
+    { "name": "is_first_order",     "dataType": "INT",   "defaultNullValue": 0 }
+  ],
+  "dateTimeFieldSpecs": [
+    {
+      "name":        "timestamp",
+      "dataType":    "LONG",
+      "format":      "1:MILLISECONDS:EPOCH",
+      "granularity": "1:MILLISECONDS"
+    }
+  ]
+}

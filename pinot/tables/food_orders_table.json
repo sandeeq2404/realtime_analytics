@@ -1,0 +1,41 @@
+{
+  "tableName": "food_orders",
+  "tableType": "REALTIME",
+
+  "segmentsConfig": {
+    "timeColumnName":      "timestamp",
+    "timeType":            "MILLISECONDS",
+    "schemaName":          "food_orders",
+    "replicasPerPartition": "1",
+    "retentionTimeUnit":   "DAYS",
+    "retentionTimeValue":  "1"
+  },
+
+  "tenants": {
+    "broker": "DefaultTenant",
+    "server": "DefaultTenant"
+  },
+
+  "tableIndexConfig": {
+    "loadMode": "MMAP",
+    "invertedIndexColumns": ["city", "cuisine", "status", "payment_method", "order_value_category"],
+    "streamConfigs": {
+      "streamType":                                  "kafka",
+      "stream.kafka.consumer.type":                  "lowlevel",
+      "stream.kafka.topic.name":                     "processed-food-orders",
+      "stream.kafka.decoder.class.name":             "org.apache.pinot.plugin.stream.kafka.KafkaJSONMessageDecoder",
+      "stream.kafka.consumer.factory.class.name":    "org.apache.pinot.plugin.stream.kafka20.KafkaConsumerFactory",
+      "stream.kafka.broker.list":                    "kafka:9092",
+      "realtime.segment.flush.threshold.rows":       "100",
+      "realtime.segment.flush.threshold.time":       "1h",
+      "stream.kafka.consumer.prop.auto.offset.reset": "smallest"
+    }
+  },
+
+  "metadata": {
+    "customConfigs": {
+      "project": "FoodStream Analytics",
+      "version": "1.0"
+    }
+  }
+}

@@ -1,0 +1,171 @@
+networks:
+  analytics-net:
+    driver: bridge
+
+volumes:
+  zookeeper-data:
+  kafka-data:
+  pinot-data:
+
+services:
+
+  # ╔══════════════════════════════════════════╗
+  # ║            KAFKA STACK                   ║
+  # ╚══════════════════════════════════════════╝
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    networks: [analytics-net]
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    networks: [analytics-net]
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "29092:29092"   # External (host) access
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 2
+      KAFKA_LOG4J_LOGGERS: "kafka=WARN,kafka.controller=WARN,kafka.log.LogCleaner=WARN,state.change.logger=WARN,kafka.producer.async.DefaultEventHandler=WARN"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    networks: [analytics-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: food-stream
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+
+  # ╔══════════════════════════════════════════╗
+  # ║            DATA PIPELINE                 ║
+  # ╚══════════════════════════════════════════╝
+
+  producer:
+    build:
+      context: ./producer
+      dockerfile: Dockerfile
+    container_name: food-producer
+    networks: [analytics-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER: kafka:9092
+      RAW_TOPIC: raw-food-orders
+      ORDER_INTERVAL_MIN: 0.5
+      ORDER_INTERVAL_MAX: 2.0
+    restart: on-failure
+
+  spark-processor:
+    build:
+      context: ./spark-processor
+      dockerfile: Dockerfile
+    container_name: spark-processor
+    networks: [analytics-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER: kafka:9092
+      INPUT_TOPIC: raw-food-orders
+      OUTPUT_TOPIC: processed-food-orders
+    restart: on-failure
+
+  # ╔══════════════════════════════════════════╗
+  # ║           APACHE PINOT                   ║
+  # ╚══════════════════════════════════════════╝
+
+  pinot-controller:
+    image: apachepinot/pinot:0.12.1
+    container_name: pinot-controller
+    networks: [analytics-net]
+    command: StartController -zkAddress zookeeper:2181 -clusterName FoodOrderCluster
+    ports:
+      - "9000:9000"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    volumes:
+      - pinot-data:/var/pinot/controller
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 15
+      start_period: 90s
+
+  pinot-broker:
+    image: apachepinot/pinot:0.12.1
+    container_name: pinot-broker
+    networks: [analytics-net]
+    command: StartBroker -zkAddress zookeeper:2181 -clusterName FoodOrderCluster
+    ports:
+      - "8099:8099"
+    depends_on:
+      pinot-controller:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8099/health || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 60s
+
+  pinot-server:
+    image: apachepinot/pinot:0.12.1
+    container_name: pinot-server
+    networks: [analytics-net]
+    command: StartServer -zkAddress zookeeper:2181 -clusterName FoodOrderCluster
+    ports:
+      - "8098:8098"
+    depends_on:
+      pinot-controller:
+        condition: service_healthy
+
+  pinot-init:
+    image: curlimages/curl:8.4.0
+    container_name: pinot-init
+    networks: [analytics-net]
+    depends_on:
+      pinot-broker:
+        condition: service_healthy
+    volumes:
+      - ./pinot:/pinot:ro
+      - ./scripts:/scripts:ro
+    entrypoint: ["/bin/sh", "/scripts/init_pinot.sh"]
+    restart: on-failure

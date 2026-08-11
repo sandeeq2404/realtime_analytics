@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FoodStream Analytics — Real-Time Data Pipeline</title>
+  <meta name="description" content="End-to-end real-time food order analytics pipeline built with Apache Kafka, PySpark, and Apache Pinot — a student portfolio project." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ═══════════════════════════════════════════
+       DESIGN TOKENS
+    ═══════════════════════════════════════════ */
+    :root {
+      --bg:        #0a0d14;
+      --bg2:       #0f1420;
+      --bg3:       #141926;
+      --card:      #161c2d;
+      --card2:     #1a2235;
+      --border:    #1e2a40;
+      --border2:   #253350;
+
+      --text:      #e8edf8;
+      --text2:     #8a9bbf;
+      --text3:     #5a6b8a;
+
+      --orange:    #ff6b35;
+      --orange2:   #ff8c5a;
+      --blue:      #3b82f6;
+      --blue2:     #60a5fa;
+      --purple:    #8b5cf6;
+      --purple2:   #a78bfa;
+      --green:     #10b981;
+      --green2:    #34d399;
+      --yellow:    #f59e0b;
+      --red:       #ef4444;
+      --cyan:      #06b6d4;
+
+      --glow-orange: 0 0 40px rgba(255,107,53,0.25);
+      --glow-blue:   0 0 40px rgba(59,130,246,0.25);
+      --glow-purple: 0 0 40px rgba(139,92,246,0.25);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    /* ═══════════════════════════════════════════
+       SCROLLBAR
+    ═══════════════════════════════════════════ */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+    /* ═══════════════════════════════════════════
+       ANIMATED BACKGROUND
+    ═══════════════════════════════════════════ */
+    .bg-grid {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(59,130,246,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    .bg-orb {
+      position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0;
+      animation: float 8s ease-in-out infinite;
+    }
+    .orb1 { width:500px; height:500px; top:-100px; right:-100px; background:rgba(255,107,53,0.07); }
+    .orb2 { width:600px; height:600px; bottom:-200px; left:-150px; background:rgba(59,130,246,0.07); animation-delay:-4s; }
+    .orb3 { width:400px; height:400px; top:50%; left:50%; background:rgba(139,92,246,0.05); animation-delay:-2s; }
+    @keyframes float {
+      0%,100% { transform: translateY(0) scale(1); }
+      50%      { transform: translateY(-30px) scale(1.05); }
+    }
+
+    /* ═══════════════════════════════════════════
+       LAYOUT
+    ═══════════════════════════════════════════ */
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+    section { padding: 100px 0; }
+
+    /* ═══════════════════════════════════════════
+       NAV
+    ═══════════════════════════════════════════ */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(10,13,20,0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+    .nav-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .nav-logo { display:flex; align-items:center; gap:10px; font-weight:700; font-size:1.1rem; }
+    .nav-logo .icon { font-size:1.4rem; }
+    .nav-badge {
+      font-size:0.65rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+      background: rgba(255,107,53,0.15); color:var(--orange);
+      border:1px solid rgba(255,107,53,0.3); border-radius:4px; padding:2px 8px;
+    }
+    .nav-links { display:flex; gap:28px; }
+    .nav-links a {
+      color:var(--text2); text-decoration:none; font-size:0.9rem; font-weight:500;
+      transition:color 0.2s;
+    }
+    .nav-links a:hover { color:var(--text); }
+
+    /* ═══════════════════════════════════════════
+       HERO
+    ═══════════════════════════════════════════ */
+    #hero {
+      min-height: 100vh;
+      display: flex; align-items: center;
+      padding-top: 64px;
+    }
+    .hero-label {
+      display:inline-flex; align-items:center; gap:8px;
+      font-size:0.8rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase;
+      color:var(--orange); margin-bottom:24px;
+    }
+    .hero-label::before {
+      content:''; display:inline-block; width:6px; height:6px;
+      background:var(--orange); border-radius:50%;
+      animation: blink 1.5s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    h1 {
+      font-size: clamp(2.8rem, 6vw, 5rem);
+      font-weight: 900; line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 24px;
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, var(--orange), var(--purple2), var(--blue2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: 1.2rem; color: var(--text2); max-width: 600px;
+      margin-bottom: 48px; font-weight: 400;
+    }
+    .hero-badges { display:flex; flex-wrap:wrap; gap:10px; margin-bottom: 48px; }
+    .badge {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:6px 14px; border-radius:8px; font-size:0.8rem; font-weight:600;
+      border:1px solid; transition: all 0.2s;
+    }
+    .badge:hover { transform: translateY(-2px); }
+    .badge-orange { background:rgba(255,107,53,0.1); color:var(--orange); border-color:rgba(255,107,53,0.3); }
+    .badge-blue   { background:rgba(59,130,246,0.1); color:var(--blue2); border-color:rgba(59,130,246,0.3); }
+    .badge-purple { background:rgba(139,92,246,0.1); color:var(--purple2); border-color:rgba(139,92,246,0.3); }
+    .badge-green  { background:rgba(16,185,129,0.1); color:var(--green2); border-color:rgba(16,185,129,0.3); }
+    .badge-cyan   { background:rgba(6,182,212,0.1); color:var(--cyan); border-color:rgba(6,182,212,0.3); }
+
+    .hero-stats { display:flex; gap:40px; }
+    .stat { }
+    .stat-num { font-size:2rem; font-weight:800; color:var(--text); }
+    .stat-label { font-size:0.8rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.08em; }
+
+    /* ═══════════════════════════════════════════
+       SECTION HEADERS
+    ═══════════════════════════════════════════ */
+    .section-label {
+      font-size:0.75rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase;
+      color: var(--orange); margin-bottom:12px;
+    }
+    .section-title {
+      font-size: clamp(1.8rem, 3vw, 2.5rem);
+      font-weight: 800; line-height: 1.2;
+      letter-spacing: -0.02em; margin-bottom:16px;
+    }
+    .section-sub { color:var(--text2); font-size:1.05rem; max-width:600px; }
+
+    /* ═══════════════════════════════════════════
+       PIPELINE DIAGRAM
+    ═══════════════════════════════════════════ */
+    .pipeline {
+      display: flex; align-items: stretch; gap: 0;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 20px; overflow: hidden; margin-top: 60px;
+    }
+    .pipeline-step {
+      flex: 1; padding: 36px 28px; position: relative;
+      border-right: 1px solid var(--border);
+      transition: background 0.3s;
+    }
+    .pipeline-step:last-child { border-right: none; }
+    .pipeline-step:hover { background: var(--card2); }
+    .pipeline-arrow {
+      position: absolute; right: -12px; top: 50%; transform: translateY(-50%);
+      width: 24px; height: 24px;
+      background: var(--bg3); border: 1px solid var(--border2);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; z-index: 2; color: var(--text2);
+    }
+    .step-num {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text3); margin-bottom: 12px;
+    }
+    .step-icon { font-size: 2rem; margin-bottom: 12px; display: block; }
+    .step-name { font-size: 0.95rem; font-weight: 700; margin-bottom: 6px; }
+    .step-tech {
+      font-size: 0.75rem; font-weight: 600;
+      padding: 3px 10px; border-radius: 20px; display: inline-block; margin-bottom: 10px;
+    }
+    .step-desc { font-size: 0.8rem; color: var(--text2); line-height: 1.5; }
+
+    /* ═══════════════════════════════════════════
+       CARDS
+    ═══════════════════════════════════════════ */
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 20px; margin-top: 50px; }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px; transition: all 0.3s;
+      position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: var(--accent, var(--orange));
+      transform: scaleX(0); transform-origin: left;
+      transition: transform 0.3s;
+    }
+    .card:hover { border-color: var(--border2); transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+    .card:hover::before { transform: scaleX(1); }
+    .card-icon { font-size: 2rem; margin-bottom: 16px; }
+    .card-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 8px; }
+    .card-desc { font-size: 0.875rem; color: var(--text2); line-height: 1.6; }
+
+    /* ═══════════════════════════════════════════
+       SCREENSHOT SECTION
+    ═══════════════════════════════════════════ */
+    .screenshot-block { margin-top: 60px; }
+    .screenshot-group { margin-bottom: 70px; }
+    .screenshot-group-header {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
+    }
+    .screenshot-group-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; font-size: 1.3rem;
+    }
+    .icon-kafka { background: rgba(255,107,53,0.15); }
+    .icon-pinot { background: rgba(59,130,246,0.15); }
+    .screenshot-group-title { font-size: 1.3rem; font-weight: 700; }
+    .screenshot-group-desc { font-size: 0.875rem; color: var(--text2); margin-top: 2px; }
+
+    .screenshots-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px,1fr)); gap: 20px; }
+    .screenshot-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden; transition: all 0.3s;
+    }
+    .screenshot-card:hover { border-color: var(--border2); transform: translateY(-4px); box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    .screenshot-header {
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-red { background: var(--red); }
+    .dot-yellow { background: var(--yellow); }
+    .dot-green { background: var(--green); }
+    .screenshot-title { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-left: 4px; }
+    .screenshot-card img {
+      width: 100%; display: block;
+      transition: transform 0.4s;
+    }
+    .screenshot-card:hover img { transform: scale(1.02); }
+    .screenshot-caption {
+      padding: 14px 16px;
+      font-size: 0.8rem; color: var(--text2); line-height: 1.5;
+      border-top: 1px solid var(--border);
+    }
+    .screenshot-caption strong { color: var(--text); }
+
+    /* Full-width screenshot */
+    .screenshot-full .screenshot-card img { max-height: 500px; object-fit: cover; object-position: top; }
+
+    /* ═══════════════════════════════════════════
+       CODE BLOCK
+    ═══════════════════════════════════════════ */
+    .code-block {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden; margin: 20px 0;
+    }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .code-lang { font-size: 0.75rem; font-weight: 600; color: var(--text3); text-transform: uppercase; }
+    .code-copy {
+      font-size: 0.75rem; color: var(--text3); cursor: pointer;
+      background: none; border: none; font-family: inherit;
+      transition: color 0.2s;
+    }
+    .code-copy:hover { color: var(--text); }
+    pre {
+      padding: 20px; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem; line-height: 1.7;
+      color: var(--text2);
+    }
+    .kw { color: var(--purple2); }
+    .fn { color: var(--blue2); }
+    .str { color: var(--green2); }
+    .cm { color: var(--text3); }
+    .hl { color: var(--orange2); }
+
+    /* ═══════════════════════════════════════════
+       QUERIES SECTION
+    ═══════════════════════════════════════════ */
+    .queries-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px,1fr)); gap: 20px; margin-top: 50px; }
+    .query-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden; transition: all 0.3s;
+    }
+    .query-card:hover { border-color: var(--border2); transform: translateY(-3px); }
+    .query-card-header {
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .query-icon { font-size: 1.1rem; }
+    .query-title { font-size: 0.9rem; font-weight: 600; }
+    .query-card pre { padding: 16px 18px; font-size: 0.8rem; }
+
+    /* ═══════════════════════════════════════════
+       DATA FLOW TIMELINE
+    ═══════════════════════════════════════════ */
+    .timeline { margin-top: 50px; position: relative; padding-left: 32px; }
+    .timeline::before {
+      content: ''; position: absolute; left: 11px; top: 0; bottom: 0; width: 2px;
+      background: linear-gradient(to bottom, var(--orange), var(--purple), var(--blue));
+    }
+    .tl-item { margin-bottom: 40px; position: relative; }
+    .tl-dot {
+      position: absolute; left: -32px; top: 4px;
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 2px solid var(--bg); display: flex; align-items: center; justify-content: center;
+      font-size: 0.6rem; font-weight: 700;
+    }
+    .tl-title { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+    .tl-desc { font-size: 0.875rem; color: var(--text2); line-height: 1.6; }
+    .tl-tag {
+      display: inline-block; margin-top: 8px;
+      font-size: 0.72rem; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+    }
+
+    /* ═══════════════════════════════════════════
+       SERVICES TABLE
+    ═══════════════════════════════════════════ */
+    .services-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 14px; margin-top: 50px; }
+    .service-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px; transition: all 0.3s;
+    }
+    .service-card:hover { border-color: var(--border2); background: var(--card2); }
+    .service-name { font-size: 0.9rem; font-weight: 700; margin-bottom: 4px; }
+    .service-port {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+      color: var(--orange); margin-bottom: 8px;
+    }
+    .service-desc { font-size: 0.8rem; color: var(--text2); }
+    .service-status {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 0.72rem; font-weight: 600; color: var(--green2); margin-top: 10px;
+    }
+    .service-status::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--green); }
+
+    /* ═══════════════════════════════════════════
+       SCHEMA TABLE
+    ═══════════════════════════════════════════ */
+    .schema-table {
+      width: 100%; border-collapse: collapse; margin-top: 30px;
+      font-size: 0.875rem;
+    }
+    .schema-table th {
+      text-align: left; padding: 10px 16px;
+      background: var(--bg2); color: var(--text3);
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+      border-bottom: 1px solid var(--border);
+    }
+    .schema-table td { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+    .schema-table tr:hover td { background: var(--card2); }
+    .schema-table code {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+      color: var(--orange2); background: rgba(255,107,53,0.08);
+      padding: 2px 6px; border-radius: 4px;
+    }
+    .type-badge {
+      font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .type-string { background: rgba(59,130,246,0.15); color: var(--blue2); }
+    .type-int    { background: rgba(16,185,129,0.15); color: var(--green2); }
+    .type-float  { background: rgba(139,92,246,0.15); color: var(--purple2); }
+    .type-long   { background: rgba(245,158,11,0.15); color: var(--yellow); }
+    .enriched-badge {
+      font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 20px;
+      background: rgba(255,107,53,0.12); color: var(--orange); border: 1px solid rgba(255,107,53,0.2);
+    }
+
+    /* ═══════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════ */
+    footer {
+      border-top: 1px solid var(--border); padding: 40px 24px;
+      text-align: center; color: var(--text3); font-size: 0.875rem;
+    }
+    footer a { color: var(--text2); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+
+    /* ═══════════════════════════════════════════
+       DIVIDER
+    ═══════════════════════════════════════════ */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+    /* ═══════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      .pipeline { flex-direction: column; }
+      .pipeline-step { border-right: none; border-bottom: 1px solid var(--border); }
+      .pipeline-arrow { display: none; }
+      .screenshots-row { grid-template-columns: 1fr; }
+      .hero-stats { gap: 24px; }
+      .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Background -->
+<div class="bg-grid"></div>
+<div class="bg-orb orb1"></div>
+<div class="bg-orb orb2"></div>
+<div class="bg-orb orb3"></div>
+
+<!-- ════════════════════════════════════════════
+     NAV
+════════════════════════════════════════════ -->
+<nav>
+  <div class="nav-inner">
+    <div class="nav-logo">
+      <span class="icon">🍔</span>
+      <span>FoodStream Analytics</span>
+      <span class="nav-badge">Live Pipeline</span>
+    </div>
+    <div class="nav-links">
+      <a href="#architecture">Architecture</a>
+      <a href="#kafka">Kafka</a>
+      <a href="#spark">Spark</a>
+      <a href="#pinot">Pinot</a>
+      <a href="#queries">Queries</a>
+      <a href="#schema">Schema</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ════════════════════════════════════════════
+     HERO
+════════════════════════════════════════════ -->
+<section id="hero">
+  <div class="container">
+    <div class="hero-label">Real-Time Data Engineering · Portfolio Project</div>
+    <h1>
+      Food Orders,<br />
+      <span class="gradient-text">Streaming in Real-Time</span>
+    </h1>
+    <p class="hero-sub">
+      An end-to-end analytics pipeline that generates live food order events,
+      streams them through Kafka, enriches them with PySpark, and serves
+      sub-second SQL queries via Apache Pinot — all with one <code style="color:var(--orange);font-family:'JetBrains Mono',monospace">docker-compose up</code>.
+    </p>
+
+    <div class="hero-badges">
+      <span class="badge badge-orange">🐍 Python 3.11 + Faker</span>
+      <span class="badge badge-orange">⚡ Apache Kafka</span>
+      <span class="badge badge-blue">🔥 PySpark 3.3 Streaming</span>
+      <span class="badge badge-purple">🔍 Apache Pinot</span>
+      <span class="badge badge-green">🐳 Docker Compose</span>
+    </div>
+
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-num" style="color:var(--orange)">~1/s</div>
+        <div class="stat-label">Orders Generated</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" style="color:var(--blue2)">8</div>
+        <div class="stat-label">Docker Services</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" style="color:var(--green2)">&lt;5s</div>
+        <div class="stat-label">End-to-End Latency</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" style="color:var(--purple2)">&lt;20ms</div>
+        <div class="stat-label">Pinot Query Time</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ════════════════════════════════════════════
+     ARCHITECTURE
+════════════════════════════════════════════ -->
+<section id="architecture">
+  <div class="container">
+    <div class="section-label">System Design</div>
+    <h2 class="section-title">How It All Fits Together</h2>
+    <p class="section-sub">
+      Five stages, three industry-grade tools, one Docker network. Data flows from fake order generation
+      to a queryable OLAP store in under five seconds.
+    </p>
+
+    <!-- Pipeline Steps -->
+    <div class="pipeline">
+
+      <div class="pipeline-step" style="--accent:var(--orange)">
+        <div class="pipeline-arrow">▶</div>
+        <div class="step-num">Step 01</div>
+        <span class="step-icon">🐍</span>
+        <div class="step-name">Data Generation</div>
+        <div class="step-tech badge badge-orange">Python + Faker</div>
+        <div class="step-desc">Generates realistic Indian food orders — cities, cuisines, restaurants, UPI payments — at ~1 event/sec.</div>
+      </div>
+
+      <div class="pipeline-step" style="--accent:var(--orange)">
+        <div class="pipeline-arrow">▶</div>
+        <div class="step-num">Step 02</div>
+        <span class="step-icon">📨</span>
+        <div class="step-name">Kafka Produce</div>
+        <div class="step-tech badge badge-orange">raw-food-orders</div>
+        <div class="step-desc">Orders serialized to JSON and published to Kafka topic with partition key = order_id for ordering guarantees.</div>
+      </div>
+
+      <div class="pipeline-step" style="--accent:var(--blue2)">
+        <div class="pipeline-arrow">▶</div>
+        <div class="step-num">Step 03</div>
+        <span class="step-icon">⚡</span>
+        <div class="step-name">Stream Processing</div>
+        <div class="step-tech badge badge-blue">PySpark</div>
+        <div class="step-desc">Structured Streaming reads from Kafka, enriches with hour_of_day, is_peak_hour, order_value_category, price_per_item.</div>
+      </div>
+
+      <div class="pipeline-step" style="--accent:var(--blue2)">
+        <div class="pipeline-arrow">▶</div>
+        <div class="step-num">Step 04</div>
+        <span class="step-icon">📤</span>
+        <div class="step-name">Kafka Publish</div>
+        <div class="step-tech badge badge-blue">processed-food-orders</div>
+        <div class="step-desc">Enriched events written to a second Kafka topic. Pinot directly subscribes to this topic via REALTIME ingestion.</div>
+      </div>
+
+      <div class="pipeline-step" style="--accent:var(--purple2)">
+        <div class="step-num">Step 05</div>
+        <span class="step-icon">🔍</span>
+        <div class="step-name">Query & Analyze</div>
+        <div class="step-tech badge badge-purple">Apache Pinot</div>
+        <div class="step-desc">REALTIME table auto-ingests from Kafka. SQL queries return results in &lt;20ms even on a live, growing dataset.</div>
+      </div>
+
+    </div>
+
+    <!-- Tech cards -->
+    <div class="cards-grid" style="margin-top:50px">
+      <div class="card" style="--accent:var(--orange)">
+        <div class="card-icon">📨</div>
+        <div class="card-title">Apache Kafka</div>
+        <div class="card-desc">Distributed message broker handling two topics: <code style="color:var(--orange2);font-family:monospace">raw-food-orders</code> and <code style="color:var(--orange2);font-family:monospace">processed-food-orders</code>. Provides durability, replay, and partition-based parallelism.</div>
+      </div>
+      <div class="card" style="--accent:var(--blue2)">
+        <div class="card-icon">⚡</div>
+        <div class="card-title">PySpark Structured Streaming</div>
+        <div class="card-desc">Reads Kafka micro-batches, parses JSON, adds computed enrichment fields, and sinks back to Kafka. Uses Eclipse Temurin Java 11 for full compatibility.</div>
+      </div>
+      <div class="card" style="--accent:var(--purple2)">
+        <div class="card-icon">🔍</div>
+        <div class="card-title">Apache Pinot</div>
+        <div class="card-desc">OLAP store built for real-time analytics. REALTIME table type consumes directly from Kafka — no ETL step needed. Inverted indexes on dimension columns for fast GROUP BY.</div>
+      </div>
+      <div class="card" style="--accent:var(--green2)">
+        <div class="card-icon">🐳</div>
+        <div class="card-title">Docker Compose</div>
+        <div class="card-desc">All 8 services orchestrated with health checks and dependency ordering. Zookeeper → Kafka → [Producer + Spark] → Pinot Controller → Broker + Server → Init.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ════════════════════════════════════════════
+     KAFKA SECTION
+════════════════════════════════════════════ -->
+<section id="kafka">
+  <div class="container">
+    <div class="section-label">Message Broker</div>
+    <h2 class="section-title">Apache Kafka — The Highway</h2>
+    <p class="section-sub">
+      Kafka acts as the central nervous system. The Python producer sends ~1 food order per second.
+      Kafka UI lets you watch the stream in real-time at <code style="color:var(--orange);font-family:monospace">localhost:8090</code>.
+    </p>
+
+    <div class="screenshot-block">
+
+      <div class="screenshot-group">
+        <div class="screenshot-group-header">
+          <div class="screenshot-group-icon icon-kafka">📋</div>
+          <div>
+            <div class="screenshot-group-title">Topic List — Two Kafka Topics</div>
+            <div class="screenshot-group-desc">raw-food-orders (producer input) and processed-food-orders (Spark output → Pinot input)</div>
+          </div>
+        </div>
+        <div class="screenshots-row">
+          <div class="screenshot-card">
+            <div class="screenshot-header">
+              <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+              <div class="screenshot-title">localhost:8090 — Kafka UI Topics</div>
+            </div>
+            <img src="assets/screenshots/kafka_topics_list.png" alt="Kafka Topics List showing raw-food-orders and processed-food-orders" loading="lazy" />
+            <div class="screenshot-caption">
+              <strong>Two topics active:</strong> <code style="color:var(--orange);font-family:monospace">raw-food-orders</code> receives events from the Python producer,
+              <code style="color:var(--orange);font-family:monospace">processed-food-orders</code> receives enriched events from PySpark.
+              Pinot's REALTIME table subscribes to the second topic.
+            </div>
+          </div>
+          <div class="screenshot-card">
+            <div class="screenshot-header">
+              <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+              <div class="screenshot-title">raw-food-orders — Topic Overview</div>
+            </div>
+            <img src="assets/screenshots/kafka_raw_orders.png" alt="Kafka raw-food-orders topic overview" loading="lazy" />
+            <div class="screenshot-caption">
+              <strong>Topic stats:</strong> Single partition, replication factor 1 (single-node dev setup).
+              The producer sends events with the <code style="color:var(--orange);font-family:monospace">order_id</code> UUID as the message key for deterministic partitioning.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screenshot-group">
+        <div class="screenshot-group-header">
+          <div class="screenshot-group-icon icon-kafka">📩</div>
+          <div>
+            <div class="screenshot-group-title">Live Messages — Real Food Orders Streaming</div>
+            <div class="screenshot-group-desc">Each message is a JSON-serialized food order event. Timestamps, UUIDs, city, cuisine, price — all real data from the running producer.</div>
+          </div>
+        </div>
+        <div class="screenshot-card screenshot-full">
+          <div class="screenshot-header">
+            <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+            <div class="screenshot-title">raw-food-orders — Live Message Stream (500+ messages consumed)</div>
+          </div>
+          <img src="assets/screenshots/kafka_messages.png" alt="Kafka raw-food-orders messages showing live food order JSON events" loading="lazy" />
+          <div class="screenshot-caption">
+            <strong>Live order events</strong> streaming at ~1/second. Each row is a JSON message with fields like
+            <code style="color:var(--orange);font-family:monospace">order_id</code>, <code style="color:var(--orange);font-family:monospace">city</code>, <code style="color:var(--orange);font-family:monospace">cuisine</code>, <code style="color:var(--orange);font-family:monospace">price</code>, <code style="color:var(--orange);font-family:monospace">status</code>.
+            The preview column shows the raw JSON payload. Kafka retains these for 2 hours (configured in docker-compose).
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Producer code snippet -->
+    <div style="margin-top: 40px;">
+      <h3 style="font-size:1.1rem; font-weight:700; margin-bottom:16px;">🐍 How the Producer Works</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Python · order_producer.py</span>
+        </div>
+        <pre><span class="cm"># Generate a realistic Indian food order using Faker</span>
+<span class="kw">def</span> <span class="fn">generate_order</span>() -> dict:
+    cuisine = random.choice([<span class="str">"Indian"</span>, <span class="str">"South Indian"</span>, <span class="str">"Chinese"</span>, ...])
+    items   = random.sample(CUISINES[cuisine], k=random.randint(<span class="hl">1</span>, <span class="hl">3</span>))
+    status  = random.choices([<span class="str">"placed"</span>, <span class="str">"preparing"</span>, <span class="str">"delivered"</span>, ...], weights=[...])
+
+    <span class="kw">return</span> {
+        <span class="str">"order_id"</span>:        str(uuid.uuid4()),
+        <span class="str">"timestamp"</span>:       int(datetime.now().timestamp() * <span class="hl">1000</span>),  <span class="cm"># epoch ms</span>
+        <span class="str">"customer_name"</span>:   fake.name(),           <span class="cm"># "Priya Sharma" (Indian locale)</span>
+        <span class="str">"city"</span>:            random.choice(CITIES),  <span class="cm"># "Bangalore", "Mumbai", ...</span>
+        <span class="str">"cuisine"</span>:         cuisine,
+        <span class="str">"price"</span>:           round(random.uniform(<span class="hl">80.0</span>, <span class="hl">1800.0</span>), <span class="hl">2</span>),
+        <span class="str">"payment_method"</span>:  random.choices([<span class="str">"UPI"</span>, <span class="str">"Credit Card"</span>, ...], weights=[...]),
+        <span class="cm"># ... 13 more fields</span>
+    }
+
+<span class="cm"># Send to Kafka every 0.5–2 seconds</span>
+producer.<span class="fn">send</span>(RAW_TOPIC, key=order[<span class="str">"order_id"</span>], value=order)
+time.<span class="fn">sleep</span>(random.uniform(<span class="hl">0.5</span>, <span class="hl">2.0</span>))</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ════════════════════════════════════════════
+     SPARK SECTION
+════════════════════════════════════════════ -->
+<section id="spark">
+  <div class="container">
+    <div class="section-label">Stream Processing</div>
+    <h2 class="section-title">PySpark — The Enrichment Engine</h2>
+    <p class="section-sub">
+      PySpark Structured Streaming reads raw orders from Kafka in micro-batches, adds computed
+      fields, then writes enriched events to a second Kafka topic for Pinot to consume.
+    </p>
+
+    <div class="timeline" style="margin-top:50px">
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:var(--orange)">1</div>
+        <div class="tl-title">Read from Kafka</div>
+        <div class="tl-desc">Uses <code style="color:var(--orange2);font-family:monospace">spark.readStream.format("kafka")</code> to subscribe to <code style="color:var(--orange2);font-family:monospace">raw-food-orders</code>. Kafka connector JAR is automatically downloaded via Maven at startup.</div>
+        <span class="tl-tag" style="background:rgba(255,107,53,0.1);color:var(--orange)">spark-sql-kafka-0-10_2.12:3.3.2</span>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:var(--blue2)">2</div>
+        <div class="tl-title">Parse JSON Schema</div>
+        <div class="tl-desc">Kafka messages arrive as raw bytes. <code style="color:var(--blue2);font-family:monospace">from_json(col("value").cast("string"), schema)</code> converts the binary payload into a typed DataFrame with 17 columns.</div>
+        <span class="tl-tag" style="background:rgba(59,130,246,0.1);color:var(--blue2)">StructType with 17 fields</span>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:var(--purple2)">3</div>
+        <div class="tl-title">Compute Enrichment Fields</div>
+        <div class="tl-desc">5 new columns are added using Spark SQL functions. No UDFs needed — all vectorized operations on the DataFrame.</div>
+        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">
+          <span class="tl-tag" style="background:rgba(139,92,246,0.1);color:var(--purple2)">hour_of_day — from epoch ms</span>
+          <span class="tl-tag" style="background:rgba(139,92,246,0.1);color:var(--purple2)">is_peak_hour — lunch/dinner rush</span>
+          <span class="tl-tag" style="background:rgba(139,92,246,0.1);color:var(--purple2)">order_value_category — Budget/Mid/Premium</span>
+          <span class="tl-tag" style="background:rgba(139,92,246,0.1);color:var(--purple2)">price_per_item — price ÷ quantity</span>
+          <span class="tl-tag" style="background:rgba(139,92,246,0.1);color:var(--purple2)">is_high_value — price ≥ ₹1000</span>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot" style="background:var(--green2)">4</div>
+        <div class="tl-title">Write to Processed Topic</div>
+        <div class="tl-desc">Enriched DataFrame serialized back to JSON via <code style="color:var(--green2);font-family:monospace">to_json(struct(...))</code> and written to <code style="color:var(--green2);font-family:monospace">processed-food-orders</code>. Checkpoint stored in <code style="color:var(--green2);font-family:monospace">/tmp/spark-checkpoint</code> for exactly-once semantics.</div>
+        <span class="tl-tag" style="background:rgba(16,185,129,0.1);color:var(--green2)">append mode · continuous query</span>
+      </div>
+
+    </div>
+
+    <div style="margin-top:40px">
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">PySpark · spark_streaming.py — Enrichment Logic</span>
+        </div>
+        <pre><span class="cm"># ── Enrich with computed fields ──────────────────────────────</span>
+enriched = (
+    parsed
+    <span class="cm"># Hour of the day (0-23) derived from epoch ms timestamp</span>
+    .<span class="fn">withColumn</span>(<span class="str">"hour_of_day"</span>, <span class="fn">hour</span>(<span class="fn">from_unixtime</span>(col(<span class="str">"timestamp"</span>) / <span class="hl">1000</span>)))
+
+    <span class="cm"># Peak hours: lunch (12-14) and dinner (19-22)</span>
+    .<span class="fn">withColumn</span>(<span class="str">"is_peak_hour"</span>,
+        <span class="fn">when</span>(col(<span class="str">"hour_of_day"</span>).<span class="fn">between</span>(<span class="hl">12</span>, <span class="hl">14</span>) | col(<span class="str">"hour_of_day"</span>).<span class="fn">between</span>(<span class="hl">19</span>, <span class="hl">22</span>),
+             <span class="fn">lit</span>(<span class="hl">1</span>)).<span class="fn">otherwise</span>(<span class="fn">lit</span>(<span class="hl">0</span>)))
+
+    <span class="cm"># Bucket orders by price range</span>
+    .<span class="fn">withColumn</span>(<span class="str">"order_value_category"</span>,
+        <span class="fn">when</span>(col(<span class="str">"price"</span>) < <span class="hl">200</span>, <span class="fn">lit</span>(<span class="str">"Budget"</span>))
+        .<span class="fn">when</span>(col(<span class="str">"price"</span>) < <span class="hl">600</span>, <span class="fn">lit</span>(<span class="str">"Mid-Range"</span>))
+        .<span class="fn">otherwise</span>(<span class="fn">lit</span>(<span class="str">"Premium"</span>)))
+)</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ════════════════════════════════════════════
+     PINOT SECTION
+════════════════════════════════════════════ -->
+<section id="pinot">
+  <div class="container">
+    <div class="section-label">Real-Time OLAP</div>
+    <h2 class="section-title">Apache Pinot — Query in Milliseconds</h2>
+    <p class="section-sub">
+      Pinot's REALTIME table type directly subscribes to Kafka — no Spark-to-database sink needed.
+      New orders appear as queryable rows within seconds of being generated.
+    </p>
+
+    <div class="screenshot-block">
+
+      <div class="screenshot-group">
+        <div class="screenshot-group-header">
+          <div class="screenshot-group-icon icon-pinot">🔍</div>
+          <div>
+            <div class="screenshot-group-title">Pinot Cluster — food_orders Table Active</div>
+            <div class="screenshot-group-desc">Cluster name: FoodOrderCluster · Table: food_orders (REALTIME) · consuming from Kafka</div>
+          </div>
+        </div>
+        <div class="screenshots-row">
+          <div class="screenshot-card">
+            <div class="screenshot-header">
+              <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+              <div class="screenshot-title">localhost:9000 — Pinot Home</div>
+            </div>
+            <img src="assets/screenshots/pinot_home.png" alt="Apache Pinot home page showing FoodOrderCluster and food_orders table" loading="lazy" />
+            <div class="screenshot-caption">
+              <strong>Pinot Cluster Manager</strong> showing the <code style="color:var(--orange);font-family:monospace">FoodOrderCluster</code>.
+              The <code style="color:var(--orange);font-family:monospace">food_orders</code> REALTIME table is listed — created automatically by the
+              <code style="color:var(--orange);font-family:monospace">pinot-init</code> container on startup via the REST API.
+            </div>
+          </div>
+          <div class="screenshot-card">
+            <div class="screenshot-header">
+              <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+              <div class="screenshot-title">Query Console — Ready to Query</div>
+            </div>
+            <img src="assets/screenshots/pinot_query_console.png" alt="Apache Pinot Query Console with food_orders table schema visible" loading="lazy" />
+            <div class="screenshot-caption">
+              <strong>Query Console</strong> with the <code style="color:var(--orange);font-family:monospace">food_orders</code> schema visible on the left.
+              All 22 columns — dimensions, metrics, and the timestamp — are available for SQL queries.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screenshot-group">
+        <div class="screenshot-group-header">
+          <div class="screenshot-group-icon icon-pinot">📊</div>
+          <div>
+            <div class="screenshot-group-title">Live Query Results — Real Data, Real Time</div>
+            <div class="screenshot-group-desc">These screenshots were taken on the live running pipeline — real food order data generated by the producer</div>
+          </div>
+        </div>
+        <div class="screenshots-row">
+          <div class="screenshot-card">
+            <div class="screenshot-header">
+              <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+              <div class="screenshot-title">Revenue by City — Live Query Result</div>
+            </div>
+            <img src="assets/screenshots/pinot_city_query.png" alt="Pinot query result showing revenue by Indian city" loading="lazy" />
+            <div class="screenshot-caption">
+              <strong>Revenue by city</strong> — Hyderabad leads with ₹1,27,186 from 131 orders.
+              Query ran in <strong style="color:var(--green2)">~20ms</strong> across 1,255 documents.
+              Results update in real-time as new orders stream in.
+            </div>
+          </div>
+          <div class="screenshot-card">
+            <div class="screenshot-header">
+              <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+              <div class="screenshot-title">Orders by Cuisine — Live Query Result</div>
+            </div>
+            <img src="assets/screenshots/pinot_cuisine_query.png" alt="Pinot query result showing orders by cuisine type" loading="lazy" />
+            <div class="screenshot-caption">
+              <strong>Orders by cuisine type</strong> — showing the distribution across Indian, Chinese, Italian, Fast Food, etc.
+              PySpark enriched each order with the cuisine field before Pinot ingested it.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Pinot config snippet -->
+    <div style="margin-top:40px">
+      <h3 style="font-size:1.1rem; font-weight:700; margin-bottom:16px;">⚙️ How Pinot Consumes from Kafka</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JSON · pinot/tables/food_orders_table.json</span>
+        </div>
+        <pre>{
+  <span class="str">"tableName"</span>: <span class="hl">"food_orders"</span>,
+  <span class="str">"tableType"</span>: <span class="hl">"REALTIME"</span>,   <span class="cm">// ← directly consumes from Kafka, no ETL needed</span>
+  <span class="str">"tableIndexConfig"</span>: {
+    <span class="str">"invertedIndexColumns"</span>: [<span class="hl">"city"</span>, <span class="hl">"cuisine"</span>, <span class="hl">"status"</span>, <span class="hl">"payment_method"</span>],
+    <span class="str">"streamConfigs"</span>: {
+      <span class="str">"streamType"</span>:                <span class="hl">"kafka"</span>,
+      <span class="str">"stream.kafka.topic.name"</span>:   <span class="hl">"processed-food-orders"</span>,
+      <span class="str">"stream.kafka.broker.list"</span>:  <span class="hl">"kafka:9092"</span>,
+      <span class="str">"stream.kafka.consumer.type"</span>: <span class="hl">"lowlevel"</span>,
+      <span class="str">"stream.kafka.decoder.class.name"</span>:
+        <span class="hl">"org.apache.pinot.plugin.stream.kafka.KafkaJSONMessageDecoder"</span>,
+      <span class="str">"realtime.segment.flush.threshold.rows"</span>: <span class="hl">"100"</span>
+    }
+  }
+}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ════════════════════════════════════════════
+     QUERIES SECTION
+════════════════════════════════════════════ -->
+<section id="queries">
+  <div class="container">
+    <div class="section-label">Analytics</div>
+    <h2 class="section-title">10 Queries, All on Live Data</h2>
+    <p class="section-sub">
+      Every query runs against the live streaming dataset. Run them at <a href="http://localhost:9000" style="color:var(--blue2)">localhost:9000</a> → Query Console.
+      Results refresh in real-time as new orders arrive.
+    </p>
+
+    <div class="queries-grid">
+
+      <div class="query-card">
+        <div class="query-card-header">
+          <span class="query-icon">📊</span>
+          <span class="query-title">Total Orders &amp; Revenue</span>
+        </div>
+        <pre><span class="kw">SELECT</span> <span class="fn">COUNT</span>(*) <span class="kw">AS</span> total_orders,
+       <span class="fn">ROUND</span>(<span class="fn">SUM</span>(price), <span class="hl">2</span>) <span class="kw">AS</span> total_revenue
+<span class="kw">FROM</span> food_orders</pre>
+      </div>
+
+      <div class="query-card">
+        <div class="query-card-header">
+          <span class="query-icon">🏙️</span>
+          <span class="query-title">Revenue by City</span>
+        </div>
+        <pre><span class="kw">SELECT</span> city, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> orders,
+       <span class="fn">ROUND</span>(<span class="fn">SUM</span>(price), <span class="hl">2</span>) <span class="kw">AS</span> revenue
+<span class="kw">FROM</span> food_orders
+<span class="kw">GROUP BY</span> city <span class="kw">ORDER BY</span> revenue <span class="kw">DESC</span></pre>
+      </div>
+
+      <div class="query-card">
+        <div class="query-card-header">
+          <span class="query-icon">🍜</span>
+          <span class="query-title">Top Cuisines</span>
+        </div>
+        <pre><span class="kw">SELECT</span> cuisine, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> orders,
+       <span class="fn">ROUND</span>(<span class="fn">AVG</span>(price), <span class="hl">2</span>) <span class="kw">AS</span> avg_price
+<span class="kw">FROM</span> food_orders
+<span class="kw">GROUP BY</span> cuisine <span class="kw">ORDER BY</span> orders <span class="kw">DESC</span></pre>
+      </div>
+
+      <div class="query-card">
+        <div class="query-card-header">
+          <span class="query-icon">🕐</span>
+          <span class="query-title">Peak vs Off-Peak Hours</span>
+        </div>
+        <pre><span class="kw">SELECT</span> is_peak_hour, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> orders,
+       <span class="fn">ROUND</span>(<span class="fn">AVG</span>(price), <span class="hl">2</span>) <span class="kw">AS</span> avg_price,
+       <span class="fn">ROUND</span>(<span class="fn">AVG</span>(delivery_time_mins), <span class="hl">1</span>) <span class="kw">AS</span> avg_eta
+<span class="kw">FROM</span> food_orders <span class="kw">GROUP BY</span> is_peak_hour</pre>
+      </div>
+
+      <div class="query-card">
+        <div class="query-card-header">
+          <span class="query-icon">💳</span>
+          <span class="query-title">Payment Method Split</span>
+        </div>
+        <pre><span class="kw">SELECT</span> payment_method,
+       <span class="fn">COUNT</span>(*) <span class="kw">AS</span> orders,
+       <span class="fn">ROUND</span>(<span class="fn">SUM</span>(price), <span class="hl">2</span>) <span class="kw">AS</span> total_revenue
+<span class="kw">FROM</span> food_orders
+<span class="kw">GROUP BY</span> payment_method <span class="kw">ORDER BY</span> orders <span class="kw">DESC</span></pre>
+      </div>
+
+      <div class="query-card">
+        <div class="query-card-header">
+          <span class="query-icon">💰</span>
+          <span class="query-title">Order Value Segments</span>
+        </div>
+        <pre><span class="kw">SELECT</span> order_value_category,
+       <span class="fn">COUNT</span>(*) <span class="kw">AS</span> orders,
+       <span class="fn">ROUND</span>(<span class="fn">AVG</span>(price), <span class="hl">2</span>) <span class="kw">AS</span> avg_price
+<span class="kw">FROM</span> food_orders
+<span class="kw">GROUP BY</span> order_value_category</pre>
+      </div>
+
+      <div class="query-card">
+        <div class="query-card-header">
+          <span class="query-icon">⭐</span>
+          <span class="query-title">Top Restaurants by Rating</span>
+        </div>
+        <pre><span class="kw">SELECT</span> restaurant_name,
+       <span class="fn">ROUND</span>(<span class="fn">AVG</span>(rating), <span class="hl">2</span>) <span class="kw">AS</span> avg_rating,
+       <span class="fn">COUNT</span>(*) <span class="kw">AS</span> orders
+<span class="kw">FROM</span> food_orders <span class="kw">WHERE</span> status = <span class="str">'delivered'</span>
+<span class="kw">GROUP BY</span> restaurant_name <span class="kw">ORDER BY</span> avg_rating <span class="kw">DESC</span></pre>
+      </div>
+
+      <div class="query-card">
+        <div class="query-card-header">
+          <span class="query-icon">📅</span>
+          <span class="query-title">Hourly Order Volume</span>
+        </div>
+        <pre><span class="kw">SELECT</span> hour_of_day, <span class="fn">COUNT</span>(*) <span class="kw">AS</span> orders
+<span class="kw">FROM</span> food_orders
+<span class="kw">GROUP BY</span> hour_of_day
+<span class="kw">ORDER BY</span> hour_of_day</pre>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ════════════════════════════════════════════
+     SCHEMA SECTION
+════════════════════════════════════════════ -->
+<section id="schema">
+  <div class="container">
+    <div class="section-label">Data Model</div>
+    <h2 class="section-title">Order Event Schema</h2>
+    <p class="section-sub">
+      Each order has 17 raw fields from the producer, plus 5 fields enriched by PySpark.
+      Fields marked <span class="enriched-badge">⚡ Enriched</span> are computed in the Spark streaming job.
+    </p>
+
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Source</th>
+          <th>Example</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>order_id</code></td><td><span class="type-badge type-string">STRING</span></td><td>Producer</td><td><code>a3f1...9c</code></td><td>UUID v4, used as Kafka message key</td></tr>
+        <tr><td><code>timestamp</code></td><td><span class="type-badge type-long">LONG</span></td><td>Producer</td><td><code>1723367890000</code></td><td>Epoch milliseconds — Pinot time column</td></tr>
+        <tr><td><code>customer_name</code></td><td><span class="type-badge type-string">STRING</span></td><td>Producer</td><td><code>Priya Sharma</code></td><td>Faker Indian locale name</td></tr>
+        <tr><td><code>city</code></td><td><span class="type-badge type-string">STRING</span></td><td>Producer</td><td><code>Bangalore</code></td><td>10 Indian cities, inverted indexed in Pinot</td></tr>
+        <tr><td><code>restaurant_name</code></td><td><span class="type-badge type-string">STRING</span></td><td>Producer</td><td><code>Spice Garden</code></td><td>One of 20 restaurant names</td></tr>
+        <tr><td><code>cuisine</code></td><td><span class="type-badge type-string">STRING</span></td><td>Producer</td><td><code>Indian</code></td><td>Indian, Chinese, Italian, Fast Food, etc.</td></tr>
+        <tr><td><code>items</code></td><td><span class="type-badge type-string">STRING</span></td><td>Producer</td><td><code>Biryani, Dal Makhani</code></td><td>1–3 random items from cuisine menu</td></tr>
+        <tr><td><code>quantity</code></td><td><span class="type-badge type-int">INT</span></td><td>Producer</td><td><code>3</code></td><td>Number of items ordered (1–6)</td></tr>
+        <tr><td><code>price</code></td><td><span class="type-badge type-float">FLOAT</span></td><td>Producer</td><td><code>449.50</code></td><td>Total price in ₹ (₹80–₹1800)</td></tr>
+        <tr><td><code>status</code></td><td><span class="type-badge type-string">STRING</span></td><td>Producer</td><td><code>delivered</code></td><td>placed / preparing / out_for_delivery / delivered / cancelled</td></tr>
+        <tr><td><code>payment_method</code></td><td><span class="type-badge type-string">STRING</span></td><td>Producer</td><td><code>UPI</code></td><td>UPI (40%), Credit Card (20%), etc.</td></tr>
+        <tr><td><code>delivery_time_mins</code></td><td><span class="type-badge type-int">INT</span></td><td>Producer</td><td><code>32</code></td><td>Estimated delivery ETA in minutes</td></tr>
+        <tr><td><code>rating</code></td><td><span class="type-badge type-float">FLOAT</span></td><td>Producer</td><td><code>4.5</code></td><td>Customer rating (only for delivered orders)</td></tr>
+        <tr style="background:rgba(255,107,53,0.04)"><td><code>hour_of_day</code></td><td><span class="type-badge type-int">INT</span></td><td><span class="enriched-badge">⚡ Spark</span></td><td><code>13</code></td><td>Hour (0-23) derived from epoch timestamp</td></tr>
+        <tr style="background:rgba(255,107,53,0.04)"><td><code>is_peak_hour</code></td><td><span class="type-badge type-int">INT</span></td><td><span class="enriched-badge">⚡ Spark</span></td><td><code>1</code></td><td>1 if 12–14 or 19–22, else 0</td></tr>
+        <tr style="background:rgba(255,107,53,0.04)"><td><code>order_value_category</code></td><td><span class="type-badge type-string">STRING</span></td><td><span class="enriched-badge">⚡ Spark</span></td><td><code>Mid-Range</code></td><td>Budget (&lt;₹200) / Mid-Range / Premium (&gt;₹600)</td></tr>
+        <tr style="background:rgba(255,107,53,0.04)"><td><code>price_per_item</code></td><td><span class="type-badge type-float">FLOAT</span></td><td><span class="enriched-badge">⚡ Spark</span></td><td><code>149.83</code></td><td>price ÷ quantity</td></tr>
+        <tr style="background:rgba(255,107,53,0.04)"><td><code>is_high_value</code></td><td><span class="type-badge type-int">INT</span></td><td><span class="enriched-badge">⚡ Spark</span></td><td><code>0</code></td><td>1 if price ≥ ₹1000</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ════════════════════════════════════════════
+     SERVICES
+════════════════════════════════════════════ -->
+<section id="services" style="padding-bottom:40px">
+  <div class="container">
+    <div class="section-label">Infrastructure</div>
+    <h2 class="section-title">8 Services, One Command</h2>
+    <p class="section-sub"><code style="color:var(--orange);font-family:monospace">docker-compose up -d</code> — that's all it takes.</p>
+
+    <div class="services-grid">
+      <div class="service-card">
+        <div class="service-name">🦒 Zookeeper</div>
+        <div class="service-port">:2181</div>
+        <div class="service-desc">Kafka coordination & leader election</div>
+        <div class="service-status">Healthy</div>
+      </div>
+      <div class="service-card">
+        <div class="service-name">📨 Apache Kafka</div>
+        <div class="service-port">:29092 (external)</div>
+        <div class="service-desc">Message broker with dual-listener setup (internal + external)</div>
+        <div class="service-status">Healthy</div>
+      </div>
+      <div class="service-card">
+        <div class="service-name">🔥 Kafka UI</div>
+        <div class="service-port"><a href="http://localhost:8090" style="color:var(--orange)">:8090 →</a></div>
+        <div class="service-desc">Web UI for topic monitoring, message browsing, consumer lag</div>
+        <div class="service-status">Running</div>
+      </div>
+      <div class="service-card">
+        <div class="service-name">🐍 Food Producer</div>
+        <div class="service-port">No port (internal)</div>
+        <div class="service-desc">Python + Faker generating ~1 order/sec to Kafka</div>
+        <div class="service-status">Running</div>
+      </div>
+      <div class="service-card">
+        <div class="service-name">⚡ Spark Processor</div>
+        <div class="service-port">No port (internal)</div>
+        <div class="service-desc">PySpark Structured Streaming enrichment job</div>
+        <div class="service-status">Running</div>
+      </div>
+      <div class="service-card">
+        <div class="service-name">🔍 Pinot Controller</div>
+        <div class="service-port"><a href="http://localhost:9000" style="color:var(--blue2)">:9000 →</a></div>
+        <div class="service-desc">Pinot cluster management + Web UI + REST API</div>
+        <div class="service-status">Healthy</div>
+      </div>
+      <div class="service-card">
+        <div class="service-name">📡 Pinot Broker</div>
+        <div class="service-port">:8099</div>
+        <div class="service-desc">SQL query endpoint — routes queries to servers</div>
+        <div class="service-status">Healthy</div>
+      </div>
+      <div class="service-card">
+        <div class="service-name">💾 Pinot Server</div>
+        <div class="service-port">:8098</div>
+        <div class="service-desc">Data storage node — holds REALTIME segments</div>
+        <div class="service-status">Running</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════
+     FOOTER
+════════════════════════════════════════════ -->
+<footer>
+  <div class="container">
+    <p style="margin-bottom:8px">
+      Built by a student for the resume 🎓 — using
+      <a href="https://kafka.apache.org">Apache Kafka</a>,
+      <a href="https://spark.apache.org">Apache Spark</a>, and
+      <a href="https://pinot.apache.org">Apache Pinot</a>.
+    </p>
+    <p style="color:var(--text3); font-size:0.8rem">
+      Kafka UI → <a href="http://localhost:8090">localhost:8090</a> &nbsp;·&nbsp;
+      Pinot UI → <a href="http://localhost:9000">localhost:9000</a> &nbsp;·&nbsp;
+      Query API → <a href="http://localhost:8099/query/sql">localhost:8099/query/sql</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
